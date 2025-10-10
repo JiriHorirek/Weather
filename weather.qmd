@@ -1,0 +1,25 @@
+---
+title: "M5120 Project"
+subtitle: "Weather Prediction"
+author: "Arina Pethshok, Jiri Hofirek, Ondrej Svihnos"
+date: ""
+format: 
+  html: 
+    page-layout: full
+    embed-resources: true
+    toc: true
+    toc-location: left
+    number-sections: true
+    code-tools:
+      source: true
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+weather <- read.csv("weatherHistory.csv")
+head(weather)
+```
+
+
