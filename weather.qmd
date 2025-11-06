@@ -17,9 +17,96 @@ format:
 ```{r}
 library(dplyr)
 library(ggplot2)
+library(tidyr)
+library(ggcorrplot)
+library(GGally)
 
 weather <- read.csv("weatherHistory.csv")
-head(weather)
+weather <- select(weather, !Loud.Cover)
+names(weather)
+```
+
+
+```{r}
+# corr <- weather %>%
+#   select(Temperature, Apparent.Temperature, Humidity, Wind.Speed, Wind.Bearing, Visibility, Pressure) %>%
+#   cor()
+weather %>% 
+  filter(!(weather$Pressure==0)) %>%
+  select(Temperature, Humidity, Pressure) %>%
+  ggpairs(
+    lower = list(continuous = wrap("points", color = "deepskyblue", alpha = 0.3)),
+    diag = list(continuous = wrap("barDiag", fill = "tomato", color = "black"))
+    )
+
+#ggcorrplot(corr, type = 'upper', lab = T)
+
+##density of variables (už je v ggpairs)
+# weather %>%
+#   ggplot(aes(x = Temperature, y = after_stat(density))) +
+#   geom_histogram(fill = "Orange", alpha = 0.5,
+#                  color = 'Orange',
+#                  bins = 30) +
+#   labs(x = "Temperature [C]", y = "Density") +
+#   theme_bw()
+# 
+# weather %>%
+#   ggplot(aes(x = Apparent.Temperature, y = after_stat(density))) +
+#   geom_histogram(fill = "Orange", alpha = 0.5,
+#                  color = 'Orange',
+#                  bins = 30) +
+#   labs(x = "Apparent temperature [C]", y = "Density") +
+#   theme_bw()
+# 
+# weather %>%
+#   ggplot(aes(x = Wind.Bearing, y = after_stat(density))) +
+#   geom_histogram(fill = "Blue", alpha = 0.5,
+#                  color = 'Blue',
+#                  bins = 30) +
+#   labs(x = "Wind direction [angles]", y = "Density") +
+#   theme_bw()
+# 
+# weather %>%
+#   ggplot(aes(x = Visibility, y = after_stat(density))) +
+#   geom_histogram(fill = "Orange", alpha = 0.5,
+#                  color = 'Orange',
+#                  bins = 30) +
+#   labs(x = "Visibility [km]", y = "Density") +
+#   theme_bw()
+# 
+# weather %>%
+#   ggplot(aes(x = Temperature, y = after_stat(density))) +
+#   geom_histogram(fill = "Orange", alpha = 0.5,
+#                  color = 'Orange',
+#                  bins = 30) +
+#   labs(x = "Temperature [C]", y = "Density") +
+#   theme_bw()
+
+##corelation of variables
+# weather %>%
+#   filter(Precip.Type == "null") %>%
+#   ggplot(aes(x = Humidity, y = Temperature, color=Precip.Type)) +
+#   geom_point(alpha=0.5)
+# 
+# weather %>%
+#   ggplot(aes(x=Temperature, y=Apparent.Temperature, color=Wind.Speed, fill = Wind.Bearing)) + 
+#   geom_point(alpha=0.5)
+# 
+# weather %>%
+#   ggplot(aes(x=Wind.Bearing, y=Wind.Speed, color=Pressure))+
+#   geom_point(alpha=0.5)
+# 
+# weather %>%
+#   ggplot(aes(x=Formatted.Date, y=Temperature))+
+#   geom_point(alpha=0.1)+
+#   theme_bw()
+# 
+# weather %>%
+#   filter(Precip.Type == "null") %>%
+#   ggplot(aes(x=Visibility, y=Humidity, color=Precip.Type))+
+#   geom_point(alpha=0.5)
+
+
 ```
 
 
