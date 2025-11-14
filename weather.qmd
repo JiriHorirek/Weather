@@ -13,6 +13,7 @@ format:
     code-tools:
       source: true
 ---
+# Exploration analysis
 
 ```{r}
 library(dplyr)
@@ -20,6 +21,7 @@ library(ggplot2)
 library(tidyr)
 library(ggcorrplot)
 library(GGally)
+library(lubridate)
 
 weather <- read.csv("weatherHistory.csv")
 weather <- select(weather, !Loud.Cover)
@@ -108,5 +110,243 @@ weather %>%
 
 
 ```
+
+
+
+# 2 Preprocessing
+## Create Factor variable, Format Data Time,  drop Summary variables.
+```{r}
+str(weather)
+```
+
+
+```{r}
+unique(weather$Summary)
+unique(weather$Precip.Type)
+```
+```{r}
+#Drop Summary columns
+weather <- weather %>%
+  select(-Summary, -Daily.Summary)
+```
+
+```{r}
+# Convert categorical columns to factors
+weather <- weather %>%
+  mutate(Precip.Type = factor(Precip.Type)) %>%
+  mutate(Formatted.Date = lubridate::ymd_hms(Formatted.Date, tz = "UTC"))
+```
+
+## Zero values
+
+```{r}
+zero_summary <- weather %>%
+  select(where(is.numeric)) %>%
+  summarise(across(everything(), ~ sum(. == 0, na.rm = TRUE))) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Column",
+               values_to = "Zero_Count") %>%
+  mutate(
+    Total_Values = sapply(weather[Column], function(x) sum(!is.na(x))),
+    Zero_Percent = (Zero_Count / Total_Values) * 100
+  )
+zero_summary
+```
+
+```{r}
+ggplot(zero_summary, aes(x = reorder(Column, -Zero_Count), y = Zero_Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = Zero_Count), vjust = -0.3) +
+  labs(
+    title = "Number of Zero Values",
+    x = "Column",
+    y = "Zero Count"
+  ) +
+  theme_minimal()
+```
+
+Pressure can be considered zero in a near-perfect vacuum, such as outer space. On Earth, this is not a realistic scenario. 
+Therefore we will replace 0 values for Pressure with the calculated pressure, which depends on a Temperature.
+
+### Zero values for Pressure
+
+```{r}
+P0 <- 101325         
+h  <- 80            #Szeged is roughly 80 meters above sea level
+g  <- 9.807          
+M  <- 0.0289644     
+R  <- 8.31447        
+
+weather <- weather %>%
+  mutate(
+    Pressure = if_else(
+      Pressure == 0,
+      P0 * exp(-g * M * h / (R * (Temperature + 273.15))),
+      Pressure
+    )
+  )
+```
+
+### Zero values for Wind.Speed and Wind.Bearing
+Logically, if Wind.Speed is Zero, there is no meaningful wind direction.Therefore we will first analyze data for 0 Values Speed.
+```{r}
+wind0_summary <- weather %>%
+  filter(Wind.Bearing == 0) %>% 
+  mutate(
+    Category = ifelse(
+      Wind.Speed == 0,
+      "Bearing 0, Wind = 0",
+      "Bearing 0, Wind > 0"   
+    )
+  ) %>%
+  group_by(Category) %>%
+  summarise(Count = n(), .groups = "drop")
+
+wind0_summary
+```
+
+```{r}
+weather <- weather %>%
+  mutate(
+    Direction = ifelse(
+      Wind.Speed == 0,
+      "No direction",
+      as.character(cut(
+        Wind.Bearing,
+        breaks = seq(0, 360, by = 45),
+        labels = c("N", "NE", "E", "SE", "S", "SW", "W", "NW"),
+        include.lowest = TRUE
+      ))
+    ),
+    Direction = factor(Direction, 
+                       levels = c("No direction", "N", "NE", "E", "SE", "S", "SW", "W", "NW"))
+  )
+
+wind_summary <- weather %>%
+  group_by(Direction) %>%
+  summarise(
+    Mean_Wind_Speed = mean(Wind.Speed, na.rm = TRUE),
+    Count = n(),
+    .groups = "drop"
+  )
+weather_summary
+
+ggplot(wind_summary, aes(x = Direction, y = Mean_Wind_Speed, fill = Mean_Wind_Speed)) +
+  geom_col(color = "black", size = 0.2) +
+  coord_polar(start = -pi/8) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(
+    title = "Mean Wind Speed by Direction",
+    fill = "Wind Speed"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    legend.position = "right"
+  )
+
+```
+
+## Remove duplicetes.
+```{r}
+weather %>% 
+  duplicated() %>% 
+  sum()
+```
+
+```{r}
+weather <- weather %>% 
+  filter(!duplicated(weather))
+```
+
+##Outliers
+
+```{r}
+numeric_cols <- sapply(weather, is.numeric)
+for(col_name in names(weather)[numeric_cols]) {
+  boxplot(weather[[col_name]],
+          main = paste(col_name),
+          ylab = col_name,
+          col = "lightblue",
+          border = "darkblue")
+
+}
+```
+Temperature, Apparent Temperature, Humidity, Wind Speed and Pressure -  those columns have some outliers values.
+
+```{r}
+# Temperature
+Q1_temperature <- quantile(weather$Temperature, 0.25, na.rm = TRUE)
+Q3_temperature <- quantile(weather$Temperature, 0.75, na.rm = TRUE)
+IQR_temperature <- Q3_temperature - Q1_temperature
+
+lower_temperature <- Q1_temperature - 1.5 * IQR_temperature
+upper_temperature <- Q3_temperature + 1.5 * IQR_temperature
+
+# Apparent Temperature
+lower_app_temperature <- quantile(weather$Apparent.Temperature, 0.05, na.rm = TRUE)
+upper_app_temperature <- quantile(weather$Apparent.Temperature, 0.95, na.rm = TRUE)
+
+# Humidity
+Q1_humidity <- quantile(weather$Humidity, 0.25, na.rm = TRUE)
+Q3_humidity <- quantile(weather$Humidity, 0.75, na.rm = TRUE)
+IQR_humidity <- Q3_humidity - Q1_humidity
+
+lower_humidity <- Q1_humidity - 1.5 * IQR_humidity
+upper_humidity <- Q3_humidity + 1.5 * IQR_humidity
+
+# Wind Speed
+lower_wind <- quantile(weather$Wind.Speed, 0.05, na.rm = TRUE)
+upper_wind <- quantile(weather$Wind.Speed, 0.95, na.rm = TRUE)
+
+# Pressure
+lower_pressure <- quantile(weather$Pressure, 0.05, na.rm = TRUE)
+upper_pressure <- quantile(weather$Pressure, 0.95, na.rm = TRUE)
+
+# Replacing outliers with lower and upper bounds
+weather <- weather %>%
+  mutate(
+    Temperature = ifelse(Temperature < lower_temperature, lower_temperature,
+                         ifelse(Temperature > upper_temperature, upper_temperature, Temperature)),
+    
+    Apparent.Temperature = ifelse(Apparent.Temperature < lower_app_temperature, lower_app_temperature,
+                                  ifelse(Apparent.Temperature > upper_app_temperature, upper_app_temperature, Apparent.Temperature)),
+    
+    Humidity = ifelse(Humidity < lower_humidity, lower_humidity,
+                      ifelse(Humidity > upper_humidity, upper_humidity, Humidity)),
+    
+    Wind.Speed = ifelse(Wind.Speed < lower_wind, lower_wind,
+                        ifelse(Wind.Speed > upper_wind, upper_wind, Wind.Speed)),
+    
+    Pressure = ifelse(Pressure < lower_pressure, lower_pressure,
+                      ifelse(Pressure > upper_pressure, upper_pressure, Pressure))
+  )
+
+numeric_cols <- sapply(weather_capped, is.numeric)
+for(col_name in names(weather_capped)[numeric_cols]) {
+  boxplot(weather_capped[[col_name]],
+          main = paste(col_name),
+          ylab = col_name,
+          col = "lightblue",
+          border = "darkblue")
+}
+
+```
+
+## Creating new variables for Temperature, Humidity, Pressure hour before. 
+
+```{r}
+#First row value is replaced by the second value, to avoid NA values.
+weather <- weather %>%
+  arrange(Formatted.Date) %>%
+  mutate(
+    Temperature_prev_hour = coalesce(lag(Temperature, 1), first(Temperature)),
+    Humidity_prev_hour    = coalesce(lag(Humidity, 1), first(Humidity)),
+    Pressure_prev_hour    = coalesce(lag(Pressure, 1), first(Pressure))
+  )
+```
+
+
+
 
 
