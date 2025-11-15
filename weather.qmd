@@ -1,7 +1,7 @@
 ---
 title: "M5120 Project"
 subtitle: "Weather Prediction"
-author: "Arina Pethshok, Jiri Hofirek, Ondrej Svihnos"
+author: "Aryna Pethshok, Jiri Hofirek, Ondrej Svihnos"
 date: ""
 format: 
   html: 
@@ -113,7 +113,7 @@ weather %>%
 
 
 
-# 2 Preprocessing
+#  Preprocessing
 ## Create Factor variable, Format Data Time,  drop Summary variables.
 ```{r}
 str(weather)
@@ -229,7 +229,7 @@ wind_summary <- weather %>%
     Count = n(),
     .groups = "drop"
   )
-weather_summary
+wind_summary
 
 ggplot(wind_summary, aes(x = Direction, y = Mean_Wind_Speed, fill = Mean_Wind_Speed)) +
   geom_col(color = "black", size = 0.2) +
@@ -259,7 +259,7 @@ weather <- weather %>%
   filter(!duplicated(weather))
 ```
 
-##Outliers
+## Outliers
 
 ```{r}
 numeric_cols <- sapply(weather, is.numeric)
@@ -322,9 +322,9 @@ weather <- weather %>%
                       ifelse(Pressure > upper_pressure, upper_pressure, Pressure))
   )
 
-numeric_cols <- sapply(weather_capped, is.numeric)
-for(col_name in names(weather_capped)[numeric_cols]) {
-  boxplot(weather_capped[[col_name]],
+numeric_cols <- sapply(weather, is.numeric)
+for(col_name in names(weather)[numeric_cols]) {
+  boxplot(weather[[col_name]],
           main = paste(col_name),
           ylab = col_name,
           col = "lightblue",
